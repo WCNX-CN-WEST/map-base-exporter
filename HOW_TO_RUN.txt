@@ -1,0 +1,85 @@
+================================================================
+  MAP BASE EXPORTER - HOW TO RUN (for testing)   v1.1.0
+================================================================
+You only do steps 1 and 3 ONCE. After that, it's just steps 2 + 4.
+
+----------------------------------------------------------------
+1. INSTALL NODE.JS  (one-time)
+----------------------------------------------------------------
+- Go to https://nodejs.org , download the Windows "LTS" installer.
+- Run it with default options. Then CLOSE and REOPEN PowerShell.
+
+----------------------------------------------------------------
+2. OPEN POWERSHELL IN THE APP FOLDER
+----------------------------------------------------------------
+Paste this and press Enter. Make sure the prompt then ENDS WITH
+  ...\Map Scrapper\map-base-exporter>
+
+cd "C:\Users\tbour\OneDrive - 10082743 Manitoba INC DB Canada Cabinet Corp\Desktop\Map Scrapper\map-base-exporter"
+
+----------------------------------------------------------------
+3. INSTALL THE APP'S PARTS  (one-time, SLOW in OneDrive)
+----------------------------------------------------------------
+npm install
+
+Let it finish until the prompt comes back. You only run this once.
+
+----------------------------------------------------------------
+4. START IT
+----------------------------------------------------------------
+npm run dev
+
+Open Microsoft Edge at the address it prints (e.g. http://localhost:5173).
+
+----------------------------------------------------------------
+5. USING IT
+----------------------------------------------------------------
+TOP BAR:
+  Draw region   - drag a rectangle to set the export area
+  Street names  - show/hide the street-name overlay
+  Selection box - show/hide the rectangle
+  Panel         - show/hide the right-hand export panel
+  Map only      - hide everything for a clean map (click again to restore)
+
+RIGHT PANEL:
+  Street names  - on/off + font-size slider
+  Document      - size / orientation / PNG or PDF / 150 or 300 DPI
+  Detail        - keeps your selection as the boundary and re-renders it at
+                  higher zoom (1x-6x) for maximum detail. The readout shows
+                  the output pixel size; huge values get auto-capped.
+  Export        - downloads the file
+
+Try one PNG and one PDF, and try Detail at 2x or 3x.
+
+----------------------------------------------------------------
+HANDY
+----------------------------------------------------------------
+- STOP the app:  click the PowerShell window, press  Ctrl + C
+- RUN AGAIN later:  just steps 2 and 4
+
+----------------------------------------------------------------
+TROUBLESHOOTING
+----------------------------------------------------------------
+First "npm install" hanging a long time = OneDrive being slow. Wait it out.
+
+If you see a red error like "Cannot find module './browsers'" or other
+install corruption, OneDrive interfered with the install. Fix it cleanly:
+
+  1. Pause OneDrive: click the OneDrive cloud icon in the system tray ->
+     Help & Settings -> Pause syncing -> 2 hours.
+  2. Make sure PowerShell is in the map-base-exporter folder (step 2).
+  3. Run these:
+        Remove-Item -Recurse -Force node_modules
+        Remove-Item -Force package-lock.json
+        npm install
+  4. npm run dev
+  5. Resume OneDrive when you're done testing.
+
+Ignore the "2 vulnerabilities / npm audit fix --force" message - it's normal
+dev noise and --force can break things.
+
+----------------------------------------------------------------
+PUT IT ON THE WEB
+----------------------------------------------------------------
+See DEPLOY.md for hosting it at a web link (GitHub Pages or Netlify Drop).
+================================================================
