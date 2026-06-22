@@ -14,8 +14,13 @@
 // They are then painted onto the composited canvas with the Canvas 2D API,
 // sized by the font-size slider -- so the exported file matches the preview.
 import maplibregl from 'maplibre-gl'
+import type { StyleSpecification } from 'maplibre-gl'
 import { getActiveStyleUrl } from '../map/constants'
-import { boostRoadLineWidths, extractStreetLabelLayerIds, setLayerGroupVisibility } from '../map/styleUtils'
+import {
+  loadStyleWithBoostedRoads,
+  extractStreetLabelLayerIds,
+  setLayerGroupVisibility,
+} from '../map/styleUtils'
 import {
   collectStreetLines,
   placeLabels,
@@ -53,7 +58,11 @@ interface TileResult {
 /**
  * Render a single tile (one hidden MapLibre instance) to a 2D canvas, and --
  * when labels are on -- collect its street-name geometry into byName.
- * roadWidthMultiplier multiplies all road line-widths (1 = unchanged).
+ *
+ * style: either the URL string (when no road boost) or a pre-processed style
+ * object from loadStyleWithBoostedRoads() (when multiplier > 1). Passing the
+ * object avoids repeated fetches and ensures boosted widths are baked into the
+ * very first render rather than applied via setPaintProperty after load.
  */
 function renderTile(
   widthPx: number,
@@ -63,7 +72,7 @@ function renderTile(
   offsetX: number,
   offsetY: number,
   byName: Map<string, Pt[][]> | null,
-  roadWidthMultiplier: number
+  style: string | StyleSpecification
 ): Promise<TileResult> {
   return new Promise((resolve, reject) => {
     const container = document.createElement('div')
@@ -72,7 +81,7 @@ function renderTile(
 
     const map = new maplibregl.Map({
       container,
-      style: getActiveStyleUrl(),
+      style,
       center,
       zoom,
       bearing: 0,
@@ -101,12 +110,6 @@ function renderTile(
     }, RENDER_TIMEOUT_MS)
 
     map.once('load', () => {
-      // Boost road line widths before the idle snapshot so wider roads are
-      // baked into the captured raster.
-      if (roadWidthMultiplier !== 1) {
-        try { boostRoadLineWidths(map, roadWidthMultiplier) } catch { /* ignore */ }
-      }
-
       // Hide the GL-baked street names -- we paint our own overlay instead, so
       // the captured raster is a clean base map with no doubled-up text.
       if (byName) {
@@ -131,7 +134,7 @@ function renderTile(
 
           const gl = map.getCanvas()
           const copy = document.createElement('canvas')
-          copy.width = gl.width
+          copy.width  = gl.width
           copy.height = gl.height
           copy.getContext('2d')!.drawImage(gl, 0, 0)
           cleanup()
@@ -192,7 +195,11 @@ function paintLabels(ctx: CanvasRenderingContext2D, labels: LabelPlacement[]): v
  * nominal page so the SAME area is rendered at a higher zoom.
  *
  * roadWidthMultiplier (default 1): multiplies all road line-widths in the GL
- * render before capture -- roads pop without changing geographic coverage.
+ * render before capture. The style JSON is fetched ONCE and pre-processed
+ * before any MapLibre instance is created, so the widths are baked into the
+ * initial style and not applied via setPaintProperty (which has timing risks).
+ * Roads with zero-width stops at low zoom get a minimum floor so laneways
+ * remain visible regardless of export zoom.
  *
  * saturation (default 1): applied to the composited canvas via a Canvas 2D
  * CSS filter (saturate(N)) after all tiles are assembled and labels painted.
@@ -217,7 +224,7 @@ export async function renderRegionToCanvas(
   const rowEdges = tileEdges(outH, rows)
 
   const page = document.createElement('canvas')
-  page.width = outW
+  page.width  = outW
   page.height = outH
   const ctx = page.getContext('2d')!
   ctx.fillStyle = '#ffffff'
@@ -225,6 +232,15 @@ export async function renderRegionToCanvas(
 
   // Accumulates street-name geometry across every tile, in page pixel space.
   const byName: Map<string, Pt[][]> | null = showLabels ? new Map() : null
+
+  // Pre-process the style once for all tiles. When roadWidthMultiplier > 1
+  // the style JSON is fetched and every road line-width is scaled; the
+  // resulting plain object is passed to each MapLibre instance directly so
+  // no per-tile setPaintProperty calls are needed.
+  const tileStyle: string | StyleSpecification =
+    roadWidthMultiplier !== 1
+      ? (await loadStyleWithBoostedRoads(getActiveStyleUrl(), roadWidthMultiplier)) as unknown as StyleSpecification
+      : getActiveStyleUrl()
 
   const total = cols * rows
   let done = 0
@@ -249,7 +265,7 @@ export async function renderRegionToCanvas(
           : `Rendering map at ${spec.dpi} DPI${detailNote}...`
       )
 
-      const tile = await renderTile(tileW, tileH, center, viewport.zoom, x0, y0, byName, roadWidthMultiplier)
+      const tile = await renderTile(tileW, tileH, center, viewport.zoom, x0, y0, byName, tileStyle)
       ctx.drawImage(tile.canvas, x0, y0)
     }
   }
@@ -270,7 +286,7 @@ export async function renderRegionToCanvas(
   if (saturation !== 1) {
     onProgress('Applying colour boost...')
     const boosted = document.createElement('canvas')
-    boosted.width = outW
+    boosted.width  = outW
     boosted.height = outH
     const bCtx = boosted.getContext('2d')!
     bCtx.filter = `saturate(${saturation})`

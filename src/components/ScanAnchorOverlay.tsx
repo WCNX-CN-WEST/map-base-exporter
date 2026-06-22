@@ -25,9 +25,10 @@ interface Props {
 interface Pt { x: number; y: number }
 
 export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange }: Props) {
-  // Force re-projection on every map move
+  // Force re-projection on every map move / zoom.
   const [, setTick] = useState(0)
-  const dragStart = useRef<{ clientX: number; clientY: number; anchor: [number, number] } | null>(null)
+  // Cleanup function for any active drag; called if the component unmounts mid-drag.
+  const cleanupDragRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     if (!map) return
@@ -37,20 +38,38 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
     return () => { map.off('move', onMove); map.off('zoom', onMove) }
   }, [map])
 
-  // Safety valve: if the pointer is released outside the box (e.g. over the
-  // panel or browser chrome), the box's onPointerUp won't fire. Clear drag
-  // state on the window so the grid doesn't keep chasing the cursor.
+  // Cancel any in-progress drag if the component unmounts mid-gesture.
   useEffect(() => {
-    const cancel = () => { dragStart.current = null }
-    window.addEventListener('pointerup', cancel)
-    window.addEventListener('pointercancel', cancel)
-    return () => {
-      window.removeEventListener('pointerup', cancel)
-      window.removeEventListener('pointercancel', cancel)
-    }
+    return () => { cleanupDragRef.current?.() }
   }, [])
 
-  // Project [lng, lat] -> screen px relative to the map container
+  // Forward wheel events from the draggable box to MapLibre's container so
+  // scroll-zoom works even when the cursor is over the grid.
+  // The overlay div and the MapLibre canvas are siblings in the DOM (different
+  // subtrees), so wheel events on the overlay never bubble to the canvas.
+  // Re-dispatching directly on map.getContainer() routes them to MapLibre's
+  // own scroll handler without triggering any extra React state.
+  const forwardWheel = useCallback((e: React.WheelEvent) => {
+    if (!map) return
+    map.getContainer().dispatchEvent(
+      new WheelEvent('wheel', {
+        deltaX: e.nativeEvent.deltaX,
+        deltaY: e.nativeEvent.deltaY,
+        deltaZ: e.nativeEvent.deltaZ,
+        deltaMode: e.nativeEvent.deltaMode,
+        ctrlKey: e.nativeEvent.ctrlKey,
+        metaKey: e.nativeEvent.metaKey,
+        shiftKey: e.nativeEvent.shiftKey,
+        altKey: e.nativeEvent.altKey,
+        clientX: e.nativeEvent.clientX,
+        clientY: e.nativeEvent.clientY,
+        bubbles: true,
+        cancelable: true,
+      })
+    )
+  }, [map])
+
+  // Project [lng, lat] -> screen px relative to the map container.
   const project = useCallback((lng: number, lat: number): Pt | null => {
     if (!map) return null
     const p = map.project([lng, lat])
@@ -64,11 +83,11 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
   if (!nw || !se) return null
 
   const boxLeft = Math.min(nw.x, se.x)
-  const boxTop = Math.min(nw.y, se.y)
-  const boxW = Math.abs(se.x - nw.x)
-  const boxH = Math.abs(se.y - nw.y)
+  const boxTop  = Math.min(nw.y, se.y)
+  const boxW    = Math.abs(se.x - nw.x)
+  const boxH    = Math.abs(se.y - nw.y)
 
-  // Grid lines: project each tile's right/bottom edges
+  // Grid lines: project each tile's right / bottom edges.
   const colLines: number[] = []
   for (let c = 1; c < settings.cols; c++) {
     const tileLng = west + c * (grid.tileGeoW * (1 - settings.overlapFraction))
@@ -82,12 +101,12 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
     if (p) rowLines.push(p.y - boxTop)
   }
 
-  // Tile index labels: centre of each tile cell
+  // Tile index labels: centre of each tile cell.
   const tileLabels: { x: number; y: number; label: string }[] = []
   for (const tile of grid.tiles) {
-    const tileLng = west + tile.col * (grid.tileGeoW * (1 - settings.overlapFraction))
-    const tileLat = north - tile.row * (grid.tileGeoH * (1 - settings.overlapFraction))
-    const tileEast = tileLng + grid.tileGeoW
+    const tileLng  = west  + tile.col * (grid.tileGeoW * (1 - settings.overlapFraction))
+    const tileLat  = north - tile.row * (grid.tileGeoH * (1 - settings.overlapFraction))
+    const tileEast  = tileLng + grid.tileGeoW
     const tileSouth = tileLat - grid.tileGeoH
     const pNw = project(tileLng, tileLat)
     const pSe = project(tileEast, tileSouth)
@@ -99,34 +118,49 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
     })
   }
 
-  // Drag handling -- move the whole grid by offsetting the anchor.
+  // Drag handling -- move the whole grid by offsetting the NW anchor.
   //
-  // IMPORTANT: setPointerCapture must be called on e.currentTarget (the
-  // draggable box itself) -- NOT on a parent element. Capturing on a parent
-  // with pointer-events:none silently fails, leaving onPointerUp unreachable
-  // when the cursor leaves the box, which causes the "stuck drag" bug.
-  function onPointerDown(e: React.PointerEvent) {
+  // Uses window-level pointermove / pointerup listeners (same pattern as
+  // SelectionOverlay's beginEditDrag) instead of setPointerCapture + React
+  // synthetic events.  setPointerCapture should work in theory, but in
+  // practice React's event delegation can drop captured pointermove events
+  // when the cursor leaves the element, causing the "stays put then snaps"
+  // behaviour the user observed.  window.addEventListener bypasses React's
+  // delegation entirely: the handler fires unconditionally regardless of
+  // where the cursor is.
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault()
     e.stopPropagation()
-    // Capture on THIS element so pointermove + pointerup always come here,
-    // even when the cursor moves outside the box mid-drag.
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    dragStart.current = { clientX: e.clientX, clientY: e.clientY, anchor: [...anchor] as [number, number] }
-  }
 
-  function onPointerMove(e: React.PointerEvent) {
-    if (!dragStart.current || !map) return
-    const dx = e.clientX - dragStart.current.clientX
-    const dy = e.clientY - dragStart.current.clientY
-    // Convert pixel delta to geographic delta using the map's unproject
-    const originPx = map.project(dragStart.current.anchor)
-    const newLngLat = map.unproject([originPx.x + dx, originPx.y + dy])
-    onAnchorChange([newLngLat.lng, newLngLat.lat])
-  }
+    // Snapshot the anchor and the pointer position at mousedown.
+    const startAnchor: [number, number] = [anchor[0], anchor[1]]
+    const startX = e.clientX
+    const startY = e.clientY
 
-  function onPointerUp(e: React.PointerEvent) {
-    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
-    dragStart.current = null
+    const onMove = (ev: PointerEvent) => {
+      if (!map) return
+      const dx = ev.clientX - startX
+      const dy = ev.clientY - startY
+      // Re-project the drag-start anchor in the CURRENT map view, then add
+      // the total pixel delta.  This is zoom-safe: map.project() always
+      // returns coordinates in the current viewport's pixel space, so even
+      // if the user accidentally scrolled the map, the math stays correct.
+      const originPx  = map.project(startAnchor)
+      const newLngLat = map.unproject([originPx.x + dx, originPx.y + dy])
+      onAnchorChange([newLngLat.lng, newLngLat.lat])
+    }
+
+    const onUp = () => {
+      cleanupDragRef.current = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup',   onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+
+    cleanupDragRef.current = onUp
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup',   onUp)
+    window.addEventListener('pointercancel', onUp)
   }
 
   return (
@@ -134,13 +168,14 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
       className="scan-anchor-overlay"
       style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
     >
-      {/* Master bounding box */}
+      {/* Master bounding box -- draggable, intercepts pointer events but
+          forwards wheel events to MapLibre so scroll-zoom still works. */}
       <div
         style={{
           position: 'absolute',
           left: boxLeft,
-          top: boxTop,
-          width: boxW,
+          top:  boxTop,
+          width:  boxW,
           height: boxH,
           boxSizing: 'border-box',
           border: '2.5px solid #0066ff',
@@ -150,9 +185,7 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
           userSelect: 'none',
         }}
         onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onWheel={forwardWheel}
       >
         {/* Internal column grid lines */}
         {colLines.map((x, i) => (
@@ -193,7 +226,7 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
             style={{
               position: 'absolute',
               left: t.x,
-              top: t.y,
+              top:  t.y,
               transform: 'translate(-50%, -50%)',
               background: 'rgba(0, 102, 255, 0.82)',
               color: '#fff',

@@ -62,12 +62,23 @@ export function extractStreetLabelLayerIds(map: MapLibreMap): string[] {
  * mult. Only output positions are scaled -- stop keys, conditions, and input
  * expressions are left unchanged.
  *
+ * minFloor (default 0): when > 0, any output value that would scale to zero
+ * (i.e. the source value was 0) is replaced with minFloor instead. This
+ * ensures road layers that have zero-width stops at low zoom levels (common in
+ * OpenFreeMap Liberty for service/minor roads) produce at least a hairline in
+ * the exported image.
+ *
  * Handles: interpolate, step, match, case, coalesce.
  * Falls back to ["*", mult, expr] for anything else that is already an
  * expression (e.g. ["get", "width"]) so the GPU evaluates the multiply.
  */
-function scaleExpr(expr: unknown, mult: number): unknown {
-  if (typeof expr === 'number') return expr * mult
+function scaleExpr(expr: unknown, mult: number, minFloor = 0): unknown {
+  if (typeof expr === 'number') {
+    // Apply the floor to zero values so roads with 0-width stops at low zoom
+    // are still visible after the export boost is applied.
+    if (expr === 0 && minFloor > 0) return minFloor
+    return expr * mult
+  }
   if (!Array.isArray(expr) || expr.length === 0) return expr
 
   const op = expr[0] as string
@@ -78,18 +89,18 @@ function scaleExpr(expr: unknown, mult: number): unknown {
     // outputs (odd indices >= 4) are widths -- scale these.
     const r: unknown[] = [expr[0], expr[1], expr[2]]
     for (let i = 3; i < expr.length - 1; i += 2) {
-      r.push(expr[i])              // stop key   -- untouched
-      r.push(scaleExpr(expr[i + 1], mult)) // output value -- scaled
+      r.push(expr[i])                               // stop key   -- untouched
+      r.push(scaleExpr(expr[i + 1], mult, minFloor)) // output val -- scaled
     }
     return r
   }
 
   if (op === 'step') {
     // ["step", input, default, stop1, val1, stop2, val2, ...]
-    const r: unknown[] = [expr[0], expr[1], scaleExpr(expr[2], mult)]
+    const r: unknown[] = [expr[0], expr[1], scaleExpr(expr[2], mult, minFloor)]
     for (let i = 3; i < expr.length - 1; i += 2) {
-      r.push(expr[i])              // stop key   -- untouched
-      r.push(scaleExpr(expr[i + 1], mult)) // output value -- scaled
+      r.push(expr[i])
+      r.push(scaleExpr(expr[i + 1], mult, minFloor))
     }
     return r
   }
@@ -100,10 +111,10 @@ function scaleExpr(expr: unknown, mult: number): unknown {
     // Values at odd positions (3, 5, 7...) and the trailing default are scaled.
     const r: unknown[] = [expr[0], expr[1]]
     for (let i = 2; i < expr.length - 1; i += 2) {
-      r.push(expr[i])              // label      -- untouched
-      r.push(scaleExpr(expr[i + 1], mult)) // value      -- scaled
+      r.push(expr[i])                               // label      -- untouched
+      r.push(scaleExpr(expr[i + 1], mult, minFloor)) // value      -- scaled
     }
-    r.push(scaleExpr(expr[expr.length - 1], mult)) // default -- scaled
+    r.push(scaleExpr(expr[expr.length - 1], mult, minFloor)) // default -- scaled
     return r
   }
 
@@ -113,16 +124,16 @@ function scaleExpr(expr: unknown, mult: number): unknown {
     // Values at odd positions (2, 4...) and the trailing default are scaled.
     const r: unknown[] = [expr[0]]
     for (let i = 1; i < expr.length - 1; i += 2) {
-      r.push(expr[i])              // condition  -- untouched
-      r.push(scaleExpr(expr[i + 1], mult)) // value      -- scaled
+      r.push(expr[i])                               // condition  -- untouched
+      r.push(scaleExpr(expr[i + 1], mult, minFloor)) // value      -- scaled
     }
-    r.push(scaleExpr(expr[expr.length - 1], mult)) // default -- scaled
+    r.push(scaleExpr(expr[expr.length - 1], mult, minFloor)) // default -- scaled
     return r
   }
 
   if (op === 'coalesce') {
     // ["coalesce", expr1, expr2, ...] -- scale every branch
-    return [op, ...expr.slice(1).map(e => scaleExpr(e, mult))]
+    return [op, ...expr.slice(1).map(e => scaleExpr(e, mult, minFloor))]
   }
 
   // Anything else (["get", ...], ["feature-state", ...], arithmetic, etc.):
@@ -156,6 +167,9 @@ const NON_ROAD_LAYER_ID =
  *  3. For everything else that is a "line" layer, scale line-width using
  *     scaleExpr() which walks the expression tree -- no expression wrapping.
  *
+ * A minimum floor of multiplier * 0.5 is applied to zero-width stops so
+ * service roads / laneways that are 0 px at low zoom are still visible.
+ *
  * Call this inside map.once('load', ...) BEFORE registering the idle handler
  * so the boosted widths are baked into the captured snapshot.
  */
@@ -163,6 +177,8 @@ export function boostRoadLineWidths(map: MapLibreMap, multiplier: number): void 
   if (multiplier === 1) return
   const style = map.getStyle()
   if (!style?.layers) return
+
+  const minFloor = multiplier * 0.5
 
   for (const layer of style.layers) {
     if (layer.type !== 'line') continue
@@ -179,9 +195,9 @@ export function boostRoadLineWidths(map: MapLibreMap, multiplier: number): void 
         // No explicit width set -- treat the implicit 1 px default as the base.
         newWidth = multiplier
       } else if (typeof currentWidth === 'number') {
-        newWidth = currentWidth * multiplier
+        newWidth = currentWidth === 0 ? minFloor : currentWidth * multiplier
       } else if (Array.isArray(currentWidth)) {
-        newWidth = scaleExpr(currentWidth, multiplier)
+        newWidth = scaleExpr(currentWidth, multiplier, minFloor)
       } else {
         continue // unexpected type (e.g. object) -- leave alone
       }
@@ -191,6 +207,61 @@ export function boostRoadLineWidths(map: MapLibreMap, multiplier: number): void 
       // Layer absent or property type unsupported -- skip silently.
     }
   }
+}
+
+/**
+ * Fetch the map style JSON, multiply every road line-width by multiplier,
+ * and return the modified style spec as a plain object ready to pass to
+ * new maplibregl.Map({ style: <result> }).
+ *
+ * Prefer this over boostRoadLineWidths() for offscreen renders: modifying
+ * the style before the map is created guarantees the widths are baked into
+ * the very first render and avoids any timing uncertainty around
+ * setPaintProperty + idle event ordering.
+ *
+ * A floor of multiplier * 0.5 px is applied to zero-width stops so
+ * laneways / service roads that are 0 px at low export-zoom levels are
+ * still visible in the final image.
+ */
+export async function loadStyleWithBoostedRoads(
+  styleUrl: string,
+  multiplier: number
+): Promise<object> {
+  const resp = await fetch(styleUrl)
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch map style: ${resp.status} ${resp.statusText}`)
+  }
+  const style = await resp.json() as Record<string, unknown>
+
+  if (multiplier === 1 || !Array.isArray(style.layers)) return style
+
+  const minFloor = multiplier * 0.5
+
+  const layers = (style.layers as unknown[]).map((layer: unknown) => {
+    const l = layer as Record<string, unknown>
+    if (l['type'] !== 'line') return layer
+
+    const sourceLayer = (l['source-layer'] as string | undefined) ?? ''
+    if (NON_ROAD_SOURCE_LAYER.test(sourceLayer)) return layer
+    if (NON_ROAD_LAYER_ID.test((l['id'] as string | undefined) ?? '')) return layer
+
+    const paint = l['paint'] as Record<string, unknown> | undefined
+    if (!paint) {
+      // Layer has no paint block at all -- create one with the boosted width.
+      return { ...l, paint: { 'line-width': multiplier } }
+    }
+
+    const lineWidth = paint['line-width']
+    if (lineWidth === undefined || lineWidth === null) {
+      // Paint block exists but line-width is unset -- implicit 1 px default.
+      return { ...l, paint: { ...paint, 'line-width': multiplier } }
+    }
+
+    const newWidth = scaleExpr(lineWidth, multiplier, minFloor)
+    return { ...l, paint: { ...paint, 'line-width': newWidth } }
+  })
+
+  return { ...style, layers }
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
 // Per Tim's versioning standard: SemVer, version visible in the UI,
 // changelog entry required on every bump.
 
-export const VERSION = '1.5.0'
+export const VERSION = '1.5.1'
 
 export interface ChangelogEntry {
   version: string
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.5.1',
+    date: '2026-06-22',
+    editor: 'Claude (Anthropic)',
+    changes: [
+      'Bug fix: grid drag now continues when cursor leaves the grid element -- replaced setPointerCapture + React synthetic events with window.addEventListener(pointermove), same pattern as SelectionOverlay',
+      'Bug fix: scroll-zoom now works over the scan grid -- wheel events on the overlay are forwarded to the MapLibre container so zoom is never blocked by the grid',
+      'Bug fix: road width boost now pre-processes the style JSON once before tile rendering instead of using setPaintProperty after load -- eliminates timing issues and guarantees widths are baked into the first render',
+      'Road width: added minimum floor (multiplier * 0.5 px) for zero-width stops so laneways and service roads that are 0 px at low zoom become visible in exports',
+    ],
+  },
   {
     version: '1.5.0',
     date: '2026-06-22',
