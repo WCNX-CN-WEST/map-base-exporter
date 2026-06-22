@@ -1,13 +1,13 @@
-// Scan Pack — fixed-size draggable master bounding box overlay.
+// Scan Pack -- fixed-size draggable master bounding box overlay.
 //
 // Unlike SelectionOverlay (which lets the user freely draw and resize),
 // this overlay renders a LOCKED rectangle whose dimensions come from the
-// scan grid settings. The user can only MOVE it — dragging repositions
+// scan grid settings. The user can only MOVE it -- dragging repositions
 // the NW anchor point on the ground.
 //
 // The internal tile grid is drawn inside the master box so the user can
 // see exactly how many tiles there are and which order they'll be captured.
-// Serpentine order shows alternating left→right / right→left arrows per row.
+// Serpentine order shows alternating left-to-right / right-to-left arrows per row.
 
 import { useRef, useState, useCallback, useEffect } from 'react'
 import type { Map as MapLibreMap } from 'maplibre-gl'
@@ -25,7 +25,6 @@ interface Props {
 interface Pt { x: number; y: number }
 
 export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange }: Props) {
-  const surfaceRef = useRef<HTMLDivElement>(null)
   // Force re-projection on every map move
   const [, setTick] = useState(0)
   const dragStart = useRef<{ clientX: number; clientY: number; anchor: [number, number] } | null>(null)
@@ -38,7 +37,20 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
     return () => { map.off('move', onMove); map.off('zoom', onMove) }
   }, [map])
 
-  // Project [lng, lat] → screen px relative to the map container
+  // Safety valve: if the pointer is released outside the box (e.g. over the
+  // panel or browser chrome), the box's onPointerUp won't fire. Clear drag
+  // state on the window so the grid doesn't keep chasing the cursor.
+  useEffect(() => {
+    const cancel = () => { dragStart.current = null }
+    window.addEventListener('pointerup', cancel)
+    window.addEventListener('pointercancel', cancel)
+    return () => {
+      window.removeEventListener('pointerup', cancel)
+      window.removeEventListener('pointercancel', cancel)
+    }
+  }, [])
+
+  // Project [lng, lat] -> screen px relative to the map container
   const project = useCallback((lng: number, lat: number): Pt | null => {
     if (!map) return null
     const p = map.project([lng, lat])
@@ -87,11 +99,18 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
     })
   }
 
-  // Drag handling — move the whole grid by offsetting the anchor
+  // Drag handling -- move the whole grid by offsetting the anchor.
+  //
+  // IMPORTANT: setPointerCapture must be called on e.currentTarget (the
+  // draggable box itself) -- NOT on a parent element. Capturing on a parent
+  // with pointer-events:none silently fails, leaving onPointerUp unreachable
+  // when the cursor leaves the box, which causes the "stuck drag" bug.
   function onPointerDown(e: React.PointerEvent) {
     e.preventDefault()
     e.stopPropagation()
-    surfaceRef.current?.setPointerCapture(e.pointerId)
+    // Capture on THIS element so pointermove + pointerup always come here,
+    // even when the cursor moves outside the box mid-drag.
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     dragStart.current = { clientX: e.clientX, clientY: e.clientY, anchor: [...anchor] as [number, number] }
   }
 
@@ -106,13 +125,12 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
   }
 
   function onPointerUp(e: React.PointerEvent) {
-    surfaceRef.current?.releasePointerCapture(e.pointerId)
+    ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
     dragStart.current = null
   }
 
   return (
     <div
-      ref={surfaceRef}
       className="scan-anchor-overlay"
       style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
     >
@@ -206,7 +224,7 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
             pointerEvents: 'none',
           }}
         >
-          ✥ Drag to position
+          Drag to position
         </div>
       </div>
     </div>
