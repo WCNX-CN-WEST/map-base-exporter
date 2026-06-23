@@ -2,7 +2,7 @@
 // Per Tim's versioning standard: SemVer, version visible in the UI,
 // changelog entry required on every bump.
 
-export const VERSION = '1.5.1'
+export const VERSION = '1.5.2'
 
 export interface ChangelogEntry {
   version: string
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.5.2',
+    date: '2026-06-22',
+    editor: 'Claude (Anthropic)',
+    changes: [
+      'JPEG export format added to the Export panel -- choose JPEG alongside PNG and PDF',
+      'JPEG quality slider (1-100) appears when JPEG is selected; default 85 balances file size and fidelity',
+      'JPEG encoding uses the browser Canvas toBlob API with user-controlled quality; files download as .jpg',
+    ],
+  },
   {
     version: '1.5.1',
     date: '2026-06-22',

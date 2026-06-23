@@ -1,6 +1,8 @@
-// Export orchestration: render the selected region, then emit PNG or PDF and
-// trigger a browser download. PDFs embed a lossless PNG so the base map stays
-// crisp when placed as a locked background layer in Illustrator.
+// Export orchestration: render the selected region, then emit PNG, JPEG, or
+// PDF and trigger a browser download. PDFs embed a lossless PNG so the base
+// map stays crisp when placed as a locked background layer in Illustrator.
+// JPEG is smaller than PNG and useful when file size matters more than
+// lossless fidelity; quality is user-controlled (1-100, default 85).
 import { jsPDF } from 'jspdf'
 import { renderRegionToCanvas, type ProgressFn } from './printRenderer'
 import { resolvePageSpec, resolveRenderSpec } from './printSpec'
@@ -26,6 +28,8 @@ export interface ExportOptions {
   roadWidthMultiplier?: number
   /** Canvas saturation multiplier (1 = natural, 1.5 = vivid, 2 = bold). */
   saturation?: number
+  /** JPEG quality 1-100 (only used when format === 'jpeg'). Default 85. */
+  jpegQuality?: number
 }
 
 /** Lower-case, filesystem-safe slug for a region name. */
@@ -104,6 +108,15 @@ export async function exportBaseMap(
     onProgress('Encoding PNG...')
     const blob = await canvasToBlob(canvas, 'image/png')
     const filename = `${base}.png`
+    triggerDownload(blob, filename)
+    return { filename, widthPx: spec.renderWidthPx, heightPx: spec.renderHeightPx, detail: spec.detail }
+  }
+
+  if (opts.format === 'jpeg') {
+    onProgress('Encoding JPEG...')
+    const quality = Math.max(1, Math.min(100, opts.jpegQuality ?? 85)) / 100
+    const blob = await canvasToBlob(canvas, 'image/jpeg', quality)
+    const filename = `${base}.jpg`
     triggerDownload(blob, filename)
     return { filename, widthPx: spec.renderWidthPx, heightPx: spec.renderHeightPx, detail: spec.detail }
   }

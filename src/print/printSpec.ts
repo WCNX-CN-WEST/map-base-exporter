@@ -2,7 +2,7 @@
 
 export type PageSizeId = 'letter' | 'tabloid' | 'a3' | 'a4' | 'custom'
 export type Orientation = 'portrait' | 'landscape'
-export type ExportFormat = 'png' | 'pdf'
+export type ExportFormat = 'png' | 'pdf' | 'jpeg'
 export type Dpi = 150 | 300
 
 /** Portrait dimensions in inches: [width, height] with width <= height. */

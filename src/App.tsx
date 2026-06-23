@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS: ExportSettings = {
   dpi: 150,
   customWidthIn: 11,
   customHeightIn: 8.5,
+  jpegQuality: 85,
 }
 
 const ALL_VISIBLE: Visibility = { panel: true, labels: true, selectionBox: true }
@@ -160,6 +161,7 @@ export function App() {
             filenameTag: job.tag,
             roadWidthMultiplier,
             saturation,
+            jpegQuality: settings.jpegQuality,
           },
           msg => setProgress(`${label}${msg}`)
         )

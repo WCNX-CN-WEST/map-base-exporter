@@ -12,6 +12,8 @@ export interface ExportSettings {
   dpi: Dpi
   customWidthIn: number
   customHeightIn: number
+  /** JPEG quality 1-100 (only used when format === 'jpeg'). */
+  jpegQuality: number
 }
 
 interface Props {
@@ -236,6 +238,12 @@ export function ExportPanel({
               PNG
             </button>
             <button
+              className={settings.format === 'jpeg' ? 'on' : ''}
+              onClick={() => set('format', 'jpeg')}
+            >
+              JPEG
+            </button>
+            <button
               className={settings.format === 'pdf' ? 'on' : ''}
               onClick={() => set('format', 'pdf')}
             >
@@ -243,6 +251,22 @@ export function ExportPanel({
             </button>
           </div>
         </label>
+
+        {settings.format === 'jpeg' && (
+          <label className="slider-label">
+            <span>
+              JPEG quality <strong>{settings.jpegQuality}</strong>
+            </span>
+            <input
+              type="range"
+              min={1}
+              max={100}
+              step={1}
+              value={settings.jpegQuality}
+              onChange={e => set('jpegQuality', parseInt(e.target.value, 10))}
+            />
+          </label>
+        )}
 
         <label className="field">
           <span>Resolution</span>
