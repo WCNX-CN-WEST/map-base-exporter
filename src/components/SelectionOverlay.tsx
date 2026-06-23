@@ -202,6 +202,31 @@ export function SelectionOverlay({
 
   const surfaceInteractive = mode === 'draw'
 
+  // Forward wheel events from the overlay to MapLibre's container so zoom
+  // works even when the cursor is over selection frames or their grip handles.
+  // The overlay and MapLibre canvas are siblings in the DOM, so wheel events
+  // on the overlay would normally never bubble to MapLibre. Re-dispatching
+  // directly on map.getContainer() routes them to MapLibre's scroll handler.
+  const forwardWheel = useCallback((e: React.WheelEvent) => {
+    if (!map) return
+    map.getContainer().dispatchEvent(
+      new WheelEvent('wheel', {
+        deltaX: e.nativeEvent.deltaX,
+        deltaY: e.nativeEvent.deltaY,
+        deltaZ: e.nativeEvent.deltaZ,
+        deltaMode: e.nativeEvent.deltaMode,
+        ctrlKey: e.nativeEvent.ctrlKey,
+        metaKey: e.nativeEvent.metaKey,
+        shiftKey: e.nativeEvent.shiftKey,
+        altKey: e.nativeEvent.altKey,
+        clientX: e.nativeEvent.clientX,
+        clientY: e.nativeEvent.clientY,
+        bubbles: true,
+        cancelable: true,
+      })
+    )
+  }, [map])
+
   return (
     <div
       ref={surfaceRef}
@@ -217,6 +242,7 @@ export function SelectionOverlay({
         drawing.current = false
         setDrawRect(null)
       }}
+      onWheel={forwardWheel}
     >
       {showBoxes &&
         frames.map((f, i) => {

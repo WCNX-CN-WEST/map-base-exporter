@@ -55,7 +55,7 @@ export function MapCanvas({
   return (
     <div className="map-stage">
       <div ref={containerRef} className={MAP_CONTAINER_CLASS} />
-      {showLabels && <TextOverlay labels={labels} />}
+      {showLabels && <TextOverlay labels={labels} map={map} />}
       <SelectionOverlay
         map={map}
         mode={mode}
