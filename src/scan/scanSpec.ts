@@ -4,8 +4,11 @@
 // way around. The user chooses page size + DPI + detail + a grid (cols x rows)
 // and an anchor point (top-left lng/lat). The system computes:
 //   the geographic size of one tile at the render zoom
-//   the step between tile origins (80% of tile size -- 20% overlap)
+//   the step between tile origins (tile size * (1 - overlap))
 //   the master bbox that results from the full grid
+//
+// Horizontal and vertical overlap are independent -- set both via
+// overlapFractionX (columns) and overlapFractionY (rows).
 //
 // All tiles share the same zoom level, so every rendered JPEG has identical
 // pixel dimensions and the same ground resolution. This is what ICE needs.
@@ -25,8 +28,10 @@ export interface ScanSettings {
   cols: number
   rows: number
   order: ScanOrder
-  /** Overlap between adjacent tiles as a fraction (0.20 = 20%). */
-  overlapFraction: number
+  /** Horizontal overlap between adjacent columns as a fraction (0.20 = 20%). */
+  overlapFractionX: number
+  /** Vertical overlap between adjacent rows as a fraction (0.20 = 20%). */
+  overlapFractionY: number
   // Tile output settings -- same controls as the existing export panel.
   tileSizeId: PageSizeId
   tileOrientation: Orientation
@@ -78,7 +83,7 @@ export function computeScanGrid(
   screenW: number,
   screenH: number
 ): ScanGrid {
-  const { cols, rows, overlapFraction, order } = settings
+  const { cols, rows, overlapFractionX, overlapFractionY, order } = settings
 
   // Resolve tile pixel dimensions (for the output JPEG, not for geo sizing)
   const pageSpec = resolvePageSpec(
@@ -106,8 +111,8 @@ export function computeScanGrid(
   const sampleTileBbox: Bounds = [anchorLng, anchorLat - tileGeoH, anchorLng + tileGeoW, anchorLat]
   const zoom = lockViewport(sampleTileBbox, tileRenderW, tileRenderH, 0).zoom
 
-  const stepX = tileGeoW * (1 - overlapFraction)
-  const stepY = tileGeoH * (1 - overlapFraction)
+  const stepX = tileGeoW * (1 - overlapFractionX)
+  const stepY = tileGeoH * (1 - overlapFractionY)
 
   // Generate ordered tiles
   const tiles: ScanTile[] = []
@@ -166,7 +171,8 @@ export const DEFAULT_SCAN_SETTINGS: ScanSettings = {
   cols: 3,
   rows: 3,
   order: 'serpentine',
-  overlapFraction: 0.2,
+  overlapFractionX: 0.2,
+  overlapFractionY: 0.2,
   tileSizeId: 'letter',
   tileOrientation: 'landscape',
   tileDpi: 150,

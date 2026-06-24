@@ -261,12 +261,15 @@ export function SelectionOverlay({
 
               {/* Four thin border-grip strips — only these intercept pointer
                   events. The frame interior stays pointer-events:none so the
-                  map beneath remains pan/zoomable. */}
+                  map beneath remains pan/zoomable. Wheel events forwarded here
+                  because the outer surface div has pointer-events:none in edit
+                  mode and won't receive wheel events directly. */}
               {mode === 'edit' && (['n','s','w','e'] as const).map(side => (
                 <div
                   key={side}
                   className={`frame-grip frame-grip-${side}`}
                   onPointerDown={e => beginEditDrag(e, f, 'move')}
+                  onWheel={forwardWheel}
                 />
               ))}
 
@@ -278,6 +281,7 @@ export function SelectionOverlay({
                     className={`frame-handle h-${h}`}
                     style={{ cursor: HANDLE_CURSOR[h], pointerEvents: 'auto' }}
                     onPointerDown={e => beginEditDrag(e, f, 'resize', h)}
+                    onWheel={forwardWheel}
                   />
                 ))}
             </div>

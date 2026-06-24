@@ -119,11 +119,38 @@ export function ScanPanel({
           : 'All rows run left to right, top to bottom.'}
       </p>
 
-      {/* Overlap (read-only) */}
-      <div className="row gap" style={{ alignItems: 'center', marginBottom: 8 }}>
-        <span className="tool-label">Overlap</span>
-        <span className="pill ok">20% fixed</span>
+      {/* Overlap -- independent H and V controls */}
+      <div className="row gap" style={{ alignItems: 'center' }}>
+        <label className="field small">
+          <span>H Overlap %</span>
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={Math.round(settings.overlapFractionX * 100)}
+            onChange={e => {
+              const pct = Math.max(0, Math.min(50, parseInt(e.target.value) || 0))
+              set('overlapFractionX', pct / 100)
+            }}
+          />
+        </label>
+        <label className="field small">
+          <span>V Overlap %</span>
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={Math.round(settings.overlapFractionY * 100)}
+            onChange={e => {
+              const pct = Math.max(0, Math.min(50, parseInt(e.target.value) || 0))
+              set('overlapFractionY', pct / 100)
+            }}
+          />
+        </label>
       </div>
+      <p className="hint" style={{ marginTop: -4 }}>
+        How much adjacent tiles overlap. 20% is typical for ICE stitching.
+      </p>
 
       {/* Tile page size */}
       <label className="field">

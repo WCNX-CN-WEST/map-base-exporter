@@ -90,13 +90,13 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
   // Grid lines: project each tile's right / bottom edges.
   const colLines: number[] = []
   for (let c = 1; c < settings.cols; c++) {
-    const tileLng = west + c * (grid.tileGeoW * (1 - settings.overlapFraction))
+    const tileLng = west + c * (grid.tileGeoW * (1 - settings.overlapFractionX))
     const p = project(tileLng, north)
     if (p) colLines.push(p.x - boxLeft)
   }
   const rowLines: number[] = []
   for (let r = 1; r < settings.rows; r++) {
-    const tileLat = north - r * (grid.tileGeoH * (1 - settings.overlapFraction))
+    const tileLat = north - r * (grid.tileGeoH * (1 - settings.overlapFractionY))
     const p = project(west, tileLat)
     if (p) rowLines.push(p.y - boxTop)
   }
@@ -104,8 +104,8 @@ export function ScanAnchorOverlay({ map, grid, settings, anchor, onAnchorChange 
   // Tile index labels: centre of each tile cell.
   const tileLabels: { x: number; y: number; label: string }[] = []
   for (const tile of grid.tiles) {
-    const tileLng  = west  + tile.col * (grid.tileGeoW * (1 - settings.overlapFraction))
-    const tileLat  = north - tile.row * (grid.tileGeoH * (1 - settings.overlapFraction))
+    const tileLng  = west  + tile.col * (grid.tileGeoW * (1 - settings.overlapFractionX))
+    const tileLat  = north - tile.row * (grid.tileGeoH * (1 - settings.overlapFractionY))
     const tileEast  = tileLng + grid.tileGeoW
     const tileSouth = tileLat - grid.tileGeoH
     const pNw = project(tileLng, tileLat)

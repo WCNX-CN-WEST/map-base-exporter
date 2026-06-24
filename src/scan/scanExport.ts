@@ -121,7 +121,8 @@ export async function exportScanPack(
       rows: settings.rows,
       tileCount: total,
       order: settings.order,
-      overlapPercent: Math.round(settings.overlapFraction * 100),
+      overlapPercentX: Math.round(settings.overlapFractionX * 100),
+      overlapPercentY: Math.round(settings.overlapFractionY * 100),
     },
     tileSpec: {
       pageSize: settings.tileSizeId,
