@@ -278,15 +278,15 @@ export function App() {
             </header>
 
             {/* Mode switcher tabs */}
-            <div className="seg" style={{ marginBottom: 0 }}>
+            <div className="panel-tabs">
               <button
-                className={panelMode === 'export' ? 'on' : ''}
+                className={panelMode === 'export' ? 'active' : ''}
                 onClick={() => setPanelMode('export')}
               >
                 Export
               </button>
               <button
-                className={panelMode === 'scan' ? 'on' : ''}
+                className={panelMode === 'scan' ? 'active' : ''}
                 onClick={() => setPanelMode('scan')}
               >
                 Scan Pack

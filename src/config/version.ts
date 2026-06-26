@@ -2,7 +2,7 @@
 // Per Tim's versioning standard: SemVer, version visible in the UI,
 // changelog entry required on every bump.
 
-export const VERSION = '1.5.3'
+export const VERSION = '1.5.5'
 
 export interface ChangelogEntry {
   version: string
@@ -12,6 +12,23 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.5.5',
+    date: '2026-06-26',
+    editor: 'TARS',
+    changes: [
+      'Bug fix: map never reached "ready" state on GitHub Pages — the MapLibre "load" event was not firing because tile requests kept the map from going idle, locking all exports at "Map not ready yet."',
+      'Added 4-second fallback in useMapInstance: if "load" does not fire but the style already has layers (style._loaded), the map is marked ready so exports work immediately.',
+      'Same resilience pattern applied to the style-switcher path (styledata event + 4 s fallback).',
+      'extractStreetLabelLayerIds wrapped in try/catch so an exception can never silently block isReady from being set.',
+    ],
+  },
+  {
+    version: '1.5.4',
+    date: '2026-06-26',
+    editor: 'TARS',
+    changes: ['Fixed Export/Scan Pack tab buttons not rendering: replaced .seg class with dedicated .panel-tabs class to avoid CSS overflow-hidden collapse in flex-column panel context.'],
+  },
   {
     version: '1.5.3',
     date: '2026-06-26',

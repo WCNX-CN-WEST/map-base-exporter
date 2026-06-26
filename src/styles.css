@@ -291,6 +291,37 @@ button:disabled { opacity: .5; cursor: default; }
 .seg button + button { border-left: 1px solid var(--border); }
 .seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
 
+/* Panel mode tab switcher (Export / Scan Pack) */
+.panel-tabs {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+}
+.panel-tabs button {
+  flex: 1;
+  background: var(--bg-2);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 6px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.panel-tabs button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.panel-tabs button:hover:not(.active) {
+  border-color: var(--accent);
+  color: var(--text-0);
+}
+
 .dims { font-size: 12px; color: var(--text-2); line-height: 1.6; font-variant-numeric: tabular-nums; }
 .progress { font-size: 12px; color: var(--text-1); }
 .hint { font-size: 12px; color: var(--text-2); line-height: 1.5; }
