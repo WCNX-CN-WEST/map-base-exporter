@@ -13,6 +13,7 @@ import { exportBaseMap } from './print/exportEngine'
 import { boundsForViewport, type Bounds } from './print/viewportUtils'
 import type { Frame } from './selection/frame'
 import { DEFAULT_MAP_STYLE_ID, getStyleUrl, type MapStyleId } from './map/constants'
+import { VERSION } from './config/version'
 import { computeScanGrid, DEFAULT_SCAN_SETTINGS, type ScanSettings, type ScanGrid } from './scan/scanSpec'
 import { exportScanPack } from './scan/scanExport'
 
@@ -270,8 +271,14 @@ export function App() {
 
         {visibility.panel && (
           <aside className="panel">
+            {/* App header */}
+            <header className="panel-head">
+              <h1>Map Base Exporter</h1>
+              <span className="version">v{VERSION}</span>
+            </header>
+
             {/* Mode switcher tabs */}
-            <div className="seg" style={{ margin: '12px 16px 0' }}>
+            <div className="seg" style={{ marginBottom: 0 }}>
               <button
                 className={panelMode === 'export' ? 'on' : ''}
                 onClick={() => setPanelMode('export')}

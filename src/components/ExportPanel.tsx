@@ -2,7 +2,6 @@
 // street-name font-size slider, the detail control, and the export trigger.
 import type { PageSizeId, Orientation, ExportFormat, Dpi } from '../print/printSpec'
 import { PAGE_LABELS, resolvePageSpec, resolveRenderSpec } from '../print/printSpec'
-import { VERSION } from '../config/version'
 import type { Frame } from '../selection/frame'
 
 export interface ExportSettings {
@@ -77,12 +76,7 @@ export function ExportPanel({
   const megapixels = (renderSpec.renderWidthPx * renderSpec.renderHeightPx) / 1_000_000
 
   return (
-    <aside className="panel">
-      <header className="panel-head">
-        <h1>Map Base Exporter</h1>
-        <span className="version">v{VERSION}</span>
-      </header>
-
+    <>
       <section className="panel-section">
         <h2>Regions</h2>
         <button
@@ -335,6 +329,6 @@ export function ExportPanel({
         {busy && <p className="progress">{progress}</p>}
         {!busy && progress && <p className="progress">{progress}</p>}
       </section>
-    </aside>
+    </>
   )
 }

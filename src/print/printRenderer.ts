@@ -7,17 +7,20 @@
 // its own hidden MapLibre instance at the SAME zoom (so tiles align), is
 // captured after 'idle', then composited onto the full-resolution canvas.
 //
-// Street names are NOT taken from MapLibre's GL labels (which don't survive the
-// offscreen capture reliably). Instead the GL street labels are hidden, the
-// street-name geometry is read straight from the vector source per tile, and
-// the SAME placement module used by the on-screen overlay positions the names.
+// Street names are NOT taken from MapLibre's GL labels. Instead ALL GL text
+// layers are hidden unconditionally at load time (using extractLabelLayerIds),
+// the street-name geometry is read straight from the vector source per tile,
+// and the SAME placement module used by the on-screen overlay positions names.
 // They are then painted onto the composited canvas with the Canvas 2D API,
 // sized by the font-size slider -- so the exported file matches the preview.
+// Hiding ALL GL text (not just street labels) prevents duplication when
+// road-width boost is active and a pre-processed style object is in use.
 import maplibregl from 'maplibre-gl'
 import type { StyleSpecification } from 'maplibre-gl'
 import { getActiveStyleUrl } from '../map/constants'
 import {
   loadStyleWithBoostedRoads,
+  extractLabelLayerIds,
   extractStreetLabelLayerIds,
   setLayerGroupVisibility,
 } from '../map/styleUtils'
@@ -110,14 +113,15 @@ function renderTile(
     }, RENDER_TIMEOUT_MS)
 
     map.once('load', () => {
-      // Hide the GL-baked street names -- we paint our own overlay instead, so
-      // the captured raster is a clean base map with no doubled-up text.
-      if (byName) {
-        try {
-          setLayerGroupVisibility(map, extractStreetLabelLayerIds(map), false)
-        } catch {
-          // style without those layers -- fine
-        }
+      // Always hide ALL GL text layers during export -- unconditionally and
+      // using the broad extractLabelLayerIds (not just street labels) so no
+      // GL text bleeds through regardless of road-width or style-object path.
+      // When showLabels is on, Canvas 2D paints one clean set of names.
+      // When showLabels is off, no labels at all is correct.
+      try {
+        setLayerGroupVisibility(map, extractLabelLayerIds(map), false)
+      } catch {
+        // style without label layers -- fine
       }
 
       map.once('idle', () => {

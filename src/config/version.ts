@@ -2,7 +2,7 @@
 // Per Tim's versioning standard: SemVer, version visible in the UI,
 // changelog entry required on every bump.
 
-export const VERSION = '1.5.2'
+export const VERSION = '1.5.3'
 
 export interface ChangelogEntry {
   version: string
@@ -12,6 +12,17 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.5.3',
+    date: '2026-06-26',
+    editor: 'Claude (Anthropic)',
+    changes: [
+      'Bug fix: label duplication on export -- GL text layers are now always hidden unconditionally during tile rendering (using extractLabelLayerIds, not just street labels) so Canvas 2D overlay is the sole source of street names in every export',
+      'Bug fix: responsive panel -- ExportPanel no longer renders a nested <aside> panel wrapper, eliminating a flex-sizing conflict that caused the Export/Scan Pack tabs to disappear on smaller displays',
+      'Panel width is now responsive via clamp(260px, 28vw, 330px) so the UI scales gracefully on narrow viewports',
+      'App title and version moved to the outer panel header so they remain visible regardless of which panel mode is active',
+    ],
+  },
   {
     version: '1.5.2',
     date: '2026-06-22',
