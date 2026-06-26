@@ -2,7 +2,7 @@
 // Per Tim's versioning standard: SemVer, version visible in the UI,
 // changelog entry required on every bump.
 
-export const VERSION = '1.5.6'
+export const VERSION = '1.5.7'
 
 export interface ChangelogEntry {
   version: string
@@ -12,6 +12,16 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.5.7',
+    date: '2026-06-26',
+    editor: 'TARS',
+    changes: [
+      'Bug fix: export always hit 60s timeout because Chrome throttles requestAnimationFrame for elements at left:-100000px (outside viewport).',
+      'Offscreen render containers now use opacity:0 / z-index:-1000 / pointer-events:none at position fixed 0,0 so Chrome keeps RAF running.',
+      'With RAF active, the render-event fallback from v1.5.6 now fires correctly: captures after 3 frames + 750ms quiet or 8s hard cap.',
+    ],
+  },
   {
     version: '1.5.6',
     date: '2026-06-26',

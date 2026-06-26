@@ -90,7 +90,7 @@ function renderTile(
 ): Promise<TileResult> {
   return new Promise((resolve, reject) => {
     const container = document.createElement('div')
-    container.style.cssText = `position:fixed;left:-100000px;top:0;width:${widthPx}px;height:${heightPx}px;`
+    container.style.cssText = `position:fixed;left:0;top:0;width:${widthPx}px;height:${heightPx}px;opacity:0;pointer-events:none;z-index:-1000;`
     document.body.appendChild(container)
 
     const map = new maplibregl.Map({
