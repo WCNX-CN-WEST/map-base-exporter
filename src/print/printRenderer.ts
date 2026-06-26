@@ -5,7 +5,18 @@
 // browser's maximum WebGL canvas / texture size, so the buffer is split into
 // a grid of tiles no larger than MAX_TILE_PX per edge. Each tile renders in
 // its own hidden MapLibre instance at the SAME zoom (so tiles align), is
-// captured after 'idle', then composited onto the full-resolution canvas.
+// captured after the render settles, then composited onto the full-resolution
+// canvas.
+//
+// Capture strategy (belt-and-suspenders):
+//   1. Primary:  map.once('load') → hide GL labels → map.once('idle') → capture.
+//      Works on most desktop environments.
+//   2. Fallback: map.on('render') — after ≥ MIN_RENDERS frames AND 750 ms
+//      quiet, capture. Kicks in when the 'idle' event never fires (observed
+//      on GitHub Pages where tile requests keep the map non-idle indefinitely).
+//   3. Hard cap: if renders keep coming non-stop, capture 8 s after the first
+//      render frame regardless.
+//   4. Hard timeout: 60 s absolute -- same as before.
 //
 // Street names are NOT taken from MapLibre's GL labels. Instead ALL GL text
 // layers are hidden unconditionally at load time (using extractLabelLayerIds),
@@ -96,64 +107,113 @@ function renderTile(
     })
 
     let settled = false
+    let stableTimer: ReturnType<typeof setTimeout> | null = null
+    let hardCapTimer: ReturnType<typeof setTimeout> | null = null
+    let labelsHidden = false
+    let renderCount = 0
+
     const cleanup = () => {
-      try {
-        map.remove()
-      } catch {
-        // ignore
-      }
+      try { map.remove() } catch { /* ignore */ }
       container.remove()
     }
 
+    // ── Hard absolute timeout ────────────────────────────────────────────────
     const timeout = setTimeout(() => {
       if (settled) return
       settled = true
+      if (stableTimer) clearTimeout(stableTimer)
+      if (hardCapTimer) clearTimeout(hardCapTimer)
       cleanup()
       reject(new Error('Print tile render timed out (tiles not loading?)'))
     }, RENDER_TIMEOUT_MS)
 
-    map.once('load', () => {
-      // Always hide ALL GL text layers during export -- unconditionally and
-      // using the broad extractLabelLayerIds (not just street labels) so no
-      // GL text bleeds through regardless of road-width or style-object path.
-      // When showLabels is on, Canvas 2D paints one clean set of names.
-      // When showLabels is off, no labels at all is correct.
+    // ── Capture (shared by all paths) ────────────────────────────────────────
+    const doCapture = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      if (stableTimer) clearTimeout(stableTimer)
+      if (hardCapTimer) clearTimeout(hardCapTimer)
+      map.off('render', onRender)
+      try {
+        // Read street-name geometry from the vector source (independent of
+        // layer visibility) and project it into full-page pixel space.
+        if (byName) {
+          const sources = resolveStreetSources(map, extractStreetLabelLayerIds(map))
+          collectStreetLines(map, sources, byName, offsetX, offsetY)
+        }
+
+        const gl = map.getCanvas()
+        const copy = document.createElement('canvas')
+        copy.width  = gl.width
+        copy.height = gl.height
+        copy.getContext('2d')!.drawImage(gl, 0, 0)
+        cleanup()
+        resolve({ canvas: copy })
+      } catch (err) {
+        cleanup()
+        reject(err)
+      }
+    }
+
+    // ── Label hiding (shared by all paths) ───────────────────────────────────
+    const hideLabels = () => {
+      if (labelsHidden) return
+      labelsHidden = true
       try {
         setLayerGroupVisibility(map, extractLabelLayerIds(map), false)
       } catch {
         // style without label layers -- fine
       }
+    }
 
-      map.once('idle', () => {
-        if (settled) return
-        settled = true
-        clearTimeout(timeout)
-        try {
-          // Read street-name geometry from the vector source (independent of
-          // layer visibility) and project it into full-page pixel space.
-          if (byName) {
-            const sources = resolveStreetSources(map, extractStreetLabelLayerIds(map))
-            collectStreetLines(map, sources, byName, offsetX, offsetY)
-          }
-
-          const gl = map.getCanvas()
-          const copy = document.createElement('canvas')
-          copy.width  = gl.width
-          copy.height = gl.height
-          copy.getContext('2d')!.drawImage(gl, 0, 0)
-          cleanup()
-          resolve({ canvas: copy })
-        } catch (err) {
-          cleanup()
-          reject(err)
-        }
-      })
+    // ── Primary: load + idle ─────────────────────────────────────────────────
+    map.once('load', () => {
+      hideLabels()
+      map.once('idle', doCapture)
     })
+
+    // ── Fallback: render-stability capture ───────────────────────────────────
+    // On some hosts (GitHub Pages, headless-like envs) the MapLibre 'idle'
+    // event never fires even though the map renders tiles correctly. We watch
+    // 'render' events and capture once the map has rendered ≥ MIN_RENDERS
+    // frames AND has been quiet for STABLE_MS ms. A separate hard-cap timer
+    // ensures we capture even when renders are continuous (sprite animations,
+    // etc.) -- at most MAX_RENDER_WAIT_MS after the first frame.
+    const MIN_RENDERS       = 3
+    const STABLE_MS         = 750
+    const MAX_RENDER_WAIT_MS = 8000
+
+    const onRender = () => {
+      if (settled) return
+      renderCount++
+
+      // Hide labels as soon as the style has layers (first render guarantees
+      // the style is parsed and layers are registered).
+      if (renderCount === 1) {
+        hideLabels()
+        // Arm the hard-cap timer from the first render.
+        hardCapTimer = setTimeout(() => {
+          console.warn('[printRenderer] render hard-cap: capturing after', MAX_RENDER_WAIT_MS, 'ms')
+          doCapture()
+        }, MAX_RENDER_WAIT_MS)
+      }
+
+      if (renderCount < MIN_RENDERS) return
+
+      // Reset the stable-period timer on every render.
+      if (stableTimer) clearTimeout(stableTimer)
+      stableTimer = setTimeout(doCapture, STABLE_MS)
+    }
+
+    map.on('render', onRender)
 
     map.once('error', e => {
       if (!map.getStyle() && !settled) {
         settled = true
         clearTimeout(timeout)
+        if (stableTimer) clearTimeout(stableTimer)
+        if (hardCapTimer) clearTimeout(hardCapTimer)
         cleanup()
         reject(e.error ?? new Error('Map style failed to load'))
       }

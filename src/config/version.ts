@@ -2,7 +2,7 @@
 // Per Tim's versioning standard: SemVer, version visible in the UI,
 // changelog entry required on every bump.
 
-export const VERSION = '1.5.5'
+export const VERSION = '1.5.6'
 
 export interface ChangelogEntry {
   version: string
@@ -12,6 +12,18 @@ export interface ChangelogEntry {
 }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: '1.5.6',
+    date: '2026-06-26',
+    editor: 'TARS',
+    changes: [
+      'Bug fix: PNG/JPEG/PDF export always timed out with "Print tile render timed out" on GitHub Pages.',
+      'Root cause: offscreen MapLibre instances never fired the idle event (same tile-request loop as the isReady bug).',
+      'Fix: added render-event fallback in renderTile() — after ≥ 3 render frames + 750 ms quiet, capture the canvas.',
+      'Hard cap: if renders are continuous (sprite animation etc.), capture 8 s after first frame.',
+      'load+idle primary path unchanged — still used when the environment supports it.',
+    ],
+  },
   {
     version: '1.5.5',
     date: '2026-06-26',
